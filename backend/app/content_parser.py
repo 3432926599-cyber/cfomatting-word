@@ -101,6 +101,9 @@ def _is_strong_heading(line: str) -> bool:
     # (一) (二)
     if RE_CN_BRACKET.match(stripped):
         return True
+    # 1. / 1.1 / 1.1.1 数字编号
+    if RE_NUM.match(stripped):
+        return True
     # 关键章节词（整行只有这个词或很少字）
     for kw in SECTION_KEYWORDS:
         if stripped == kw or (stripped.startswith(kw) and len(stripped) <= len(kw) + 6):
