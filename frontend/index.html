@@ -879,7 +879,7 @@ footer {
 <!-- ═══════════════════════════════════════════════════════ SCRIPTS -->
 <script>
 // ═══════════════════════════════════════════════════════
-// 后端地址配置 — 本地后端默认 http://localhost:8000
+// 后端地址配置 — 优先级：URL参数 > localStorage > GitHub > localhost
 // ═══════════════════════════════════════════════════════
 var BACKEND_URL = (function(){
   // URL 参数优先: ?backend=http://192.168.1.100:8000
@@ -892,8 +892,30 @@ var BACKEND_URL = (function(){
   return 'http://localhost:8000';
 })();
 
-// 保存 backend URL 到 localStorage
 localStorage.setItem('cf_backend_url', BACKEND_URL);
+
+// 异步从 GitHub 获取最新隧道地址（仅在非 ?backend= 模式下生效）
+var GITHUB_URL_POINTER = 'https://raw.githubusercontent.com/3432926599-cyber/cfomatting-word/main/backend-url.txt';
+(function fetchBackendFromGitHub(){
+  var paramUrl = new URLSearchParams(window.location.search).get('backend');
+  if (paramUrl) return; // URL 参数明确指定，不覆盖
+  fetch(GITHUB_URL_POINTER, { cache: 'no-cache' })
+    .then(function(r){ return r.text(); })
+    .then(function(text){
+      var url = text.trim();
+      if (url && url.indexOf('http') === 0) {
+        var old = BACKEND_URL;
+        BACKEND_URL = url;
+        localStorage.setItem('cf_backend_url', BACKEND_URL);
+        document.getElementById('backendUrl').textContent = BACKEND_URL;
+        // 如果 URL 变了，重新检查后端
+        if (old !== BACKEND_URL) {
+          checkBackend();
+        }
+      }
+    })
+    .catch(function(){}); // GitHub 获取失败，沿用已有 URL
+})();
 
 var backendOnline = false;
 var backendChecking = true;
