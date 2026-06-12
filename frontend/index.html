@@ -124,6 +124,33 @@
   color: var(--orange); font-weight: 700;
   text-decoration: underline; text-underline-offset: 2px;
 }
+.offline-notice-input-row {
+  display: flex; gap: var(--s2); margin-top: var(--s3);
+  flex-wrap: wrap;
+}
+.offline-notice-input {
+  flex: 1; min-width: 240px;
+  padding: var(--s2) var(--s3);
+  border: 2px solid var(--carbon-l);
+  font-family: var(--font-mono); font-size: .7rem;
+  color: var(--carbon); background: var(--chalk);
+  transition: border-color 0.05s;
+}
+.offline-notice-input:focus { outline: none; border-color: var(--orange); }
+.offline-notice-input::placeholder {
+  font-family: var(--font-mono); font-size: .6rem;
+  color: var(--ink-l);
+}
+.offline-notice-btn {
+  padding: var(--s2) var(--s4);
+  background: var(--carbon); color: var(--chalk);
+  border: 2px solid var(--carbon);
+  font-family: var(--font-mono); font-size: .65rem; font-weight: 700;
+  cursor: pointer; letter-spacing: .04em; text-transform: uppercase;
+  white-space: nowrap;
+  min-height: 44px;
+}
+.offline-notice-btn:hover { background: var(--orange); border-color: var(--orange); }
 
 /* ═══════════════════════════════════════════════════════
    BASE — 混凝土底色
@@ -707,10 +734,15 @@ footer {
     <span class="icon">[!]</span> 后端未启用
   </div>
   <div class="offline-notice-body">
-    请先在本地启动后端服务，然后刷新页面。<br>
-    <strong>启动方式：</strong>在项目目录运行 <code>start.bat</code>，或执行：<br>
-    <code>cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000</code><br>
-    启动后后端地址默认为 <a href="http://localhost:8000" target="_blank">http://localhost:8000</a>
+    请先在本地启动后端服务，在项目目录运行 <code>start.bat</code><br>
+    启动后会自动生成公网隧道链接，把链接发给别人即可使用。<br>
+    如果你是用户，请粘贴分享给你的链接到下方：
+  </div>
+  <div class="offline-notice-input-row">
+    <input class="offline-notice-input" id="backendUrlInput"
+      placeholder="https://cfomatting-word.pages.dev/?backend=https://xxx.trycloudflare.com"
+    >
+    <button class="offline-notice-btn" onclick="applyBackendUrl()">连接</button>
   </div>
 </div>
 
@@ -865,6 +897,36 @@ localStorage.setItem('cf_backend_url', BACKEND_URL);
 
 var backendOnline = false;
 var backendChecking = true;
+
+// ── 后端 URL 输入框 ──
+function applyBackendUrl() {
+  var input = document.getElementById('backendUrlInput');
+  var raw = (input.value || '').trim();
+  if (!raw) return;
+  // 如果粘贴的是完整前端链接（包含 ?backend=），自动提取后端地址
+  if (raw.indexOf('?backend=') !== -1) {
+    raw = raw.split('?backend=')[1].split('&')[0];
+  }
+  // 去掉末尾斜杠
+  raw = raw.replace(/\/+$/, '');
+  BACKEND_URL = raw;
+  localStorage.setItem('cf_backend_url', BACKEND_URL);
+  document.getElementById('backendUrl').textContent = BACKEND_URL;
+  backendChecking = true; backendOnline = false;
+  updateBackendUI();
+  checkBackend();
+  showToast('已更新后端地址，正在重连...', 'info');
+}
+
+// 页面加载时如果 ?backend= 存在，自动填入输入框
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var b = params.get('backend');
+  if (b) {
+    var el = document.getElementById('backendUrlInput');
+    if (el) el.value = b;
+  }
+})();
 
 // ── 后端健康检查 ──
 function checkBackend() {
