@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>CFomatting — 文档格式自动化</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Work+Sans:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<style>
+/* ═══════════════════════════════════════════════════════
+   DESIGN TOKENS — 野兽派工业风
+   ═══════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* 色彩 — 混凝土 + 油墨 + 安全橙 */
+  --concrete:    #e8e4df;
+  --concrete-l:  #f0ede9;
+  --carbon:      #1a1a1a;
+  --carbon-l:    #3d3d3d;
+  --orange:      #e85d04;
+  --orange-l:    #f0782a;
+  --chalk:       #f5f3f0;
+  --chalk-d:     #e0dcd7;
+  --yellow:      #ffba08;
+  --yellow-p:    #fff8e5;
+  --ink:         #1a1a1a;
+  --ink-m:       #5c5c5c;
+  --ink-l:       #8c8c8c;
+  --green:       #2e7d32;
+  --red:         #c62828;
+
+  /* 字体 — Space Mono 为主导 */
+  --font-mono:   'Space Mono', 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --font-ui:     'Work Sans', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+
+  /* 间距 — 严格 8px 网格 */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   BACKEND STATUS BAR — 工业连接指示灯
+   ═══════════════════════════════════════════════════════ */
+.backend-bar {
+  background: var(--carbon);
+  border-bottom: 2px solid var(--carbon-l);
+  padding: 0 var(--s5);
+  font-family: var(--font-mono);
+  font-size: .62rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  position: sticky; top: 0; z-index: 200;
+}
+.backend-bar-inner {
+  max-width: 1300px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 28px;
+}
+.backend-status {
+  display: flex; align-items: center; gap: 8px;
+}
+.backend-dot {
+  width: 8px; height: 8px;
+  border-radius: 0;
+  transition: background 0.3s;
+}
+.backend-dot.offline { background: var(--red); }
+.backend-dot.checking { background: var(--yellow); }
+.backend-dot.online { background: var(--green); }
+.backend-label {
+  color: var(--ink-l);
+  transition: color 0.3s;
+}
+.backend-label.online { color: var(--chalk); }
+.backend-url {
+  color: var(--ink-l);
+  font-size: .58rem;
+}
+.backend-bar button {
+  background: none; border: 2px solid var(--carbon-l);
+  color: var(--ink-l); cursor: pointer;
+  font-family: var(--font-mono); font-size: .58rem;
+  padding: 2px 8px;
+  transition: all 0.05s;
+}
+.backend-bar button:hover { border-color: var(--orange); color: var(--orange); }
+
+/* ═══════════════════════════════════════════════════════
+   OFFLINE OVERLAY — 后端未启用提示
+   ═══════════════════════════════════════════════════════ */
+.offline-notice {
+  display: none;
+  margin: 0 var(--s5);
+  max-width: 1300px;
+  margin-left: auto; margin-right: auto;
+  padding: var(--s4) var(--s5);
+  border: 2px solid var(--red);
+  border-top: none;
+  background: #fef5f5;
+  font-family: var(--font-mono);
+  position: relative; z-index: 1;
+}
+.offline-notice.visible { display: block; }
+.offline-notice-title {
+  font-size: .75rem; font-weight: 700;
+  color: var(--red); letter-spacing: .04em;
+  text-transform: uppercase; margin-bottom: var(--s2);
+  display: flex; align-items: center; gap: var(--s2);
+}
+.offline-notice-title .icon { font-size: 1.1rem; }
+.offline-notice-body {
+  font-size: .65rem; color: var(--carbon-l);
+  line-height: 1.6; letter-spacing: .02em;
+}
+.offline-notice-body code {
+  font-family: var(--font-mono); font-size: .62rem;
+  background: rgba(0,0,0,.06); padding: 1px 6px;
+  border: 1px solid rgba(0,0,0,.1);
+}
+.offline-notice-body a {
+  color: var(--orange); font-weight: 700;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   BASE — 混凝土底色
+   ═══════════════════════════════════════════════════════ */
+html { font-size: 16px; }
+body {
+  font-family: var(--font-ui);
+  background: var(--concrete);
+  color: var(--ink);
+  line-height: 1.5;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  /* 安全区适配（刘海屏） */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  /* iOS 平滑滚动 */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 所有可点击元素 — 消除 300ms 延迟 */
+button, .upload-zone, .btn-download, a {
+  touch-action: manipulation;
+}
+
+/* 极淡的网格纹理 */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0,0,0,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   HEADER — 工业标牌
+   ═══════════════════════════════════════════════════════ */
+header {
+  background: var(--carbon);
+  padding: 0 var(--s5);
+  position: sticky; top: 28px; z-index: 100;
+  border-bottom: 3px solid var(--orange);
+}
+.header-inner {
+  max-width: 1300px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 52px;
+}
+
+/* 品牌 — 像设备铭牌 */
+.brand {
+  display: flex; align-items: baseline; gap: var(--s2);
+  text-decoration: none; flex-shrink: 0;
+}
+.brand-icon {
+  font-family: var(--font-mono);
+  font-size: 1.15rem; font-weight: 700;
+  color: var(--chalk);
+  letter-spacing: .04em;
+}
+.brand-sub {
+  font-family: var(--font-mono);
+  font-size: .65rem; color: var(--ink-l);
+  font-weight: 400; letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+/* 步骤指示器 — 工业仪表 */
+.steps { display: flex; align-items: center; gap: 0; }
+.step {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 12px;
+  font-family: var(--font-mono); font-size: .68rem; font-weight: 400;
+  color: var(--ink-l); white-space: nowrap;
+  text-transform: uppercase; letter-spacing: .04em;
+  transition: color 0.05s;
+}
+.step.active { color: var(--orange); font-weight: 700; }
+.step.done { color: var(--chalk); }
+.step-dot {
+  width: 8px; height: 8px;
+  background: var(--ink-l);
+  transition: background 0.05s;
+}
+.step.active .step-dot { background: var(--orange); }
+.step.done .step-dot { background: var(--chalk); }
+.step-connector {
+  width: 20px; height: 2px;
+  background: var(--carbon-l);
+  margin: 0 2px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   MAIN — 全宽上下排列
+   ═══════════════════════════════════════════════════════ */
+main {
+  max-width: 1300px; margin: 0 auto;
+  padding: var(--s5) var(--s5) var(--s4);
+  position: relative; z-index: 1;
+}
+.page-subtitle {
+  font-family: var(--font-mono); font-size: .72rem;
+  color: var(--ink-m); letter-spacing: .03em;
+  text-transform: uppercase;
+  margin-bottom: var(--s5);
+  padding-left: var(--s2);
+  border-left: 3px solid var(--orange);
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s5);
+  align-items: start;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PANELS — 硬边工业面板（无圆角、无阴影）
+   ═══════════════════════════════════════════════════════ */
+.panel {
+  background: var(--chalk);
+  border: 2px solid var(--carbon);
+  /* 无圆角、无阴影 */
+}
+
+.panel-header {
+  padding: var(--s3) var(--s4);
+  border-bottom: 2px solid var(--carbon);
+  background: var(--carbon);
+  display: flex; align-items: center; gap: var(--s2);
+}
+.panel-header-icon {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 14px; font-weight: 700;
+}
+.panel-header-icon.format { color: var(--orange); }
+.panel-header-icon.content { color: var(--yellow); }
+.panel-title {
+  font-family: var(--font-mono); font-size: .8rem; font-weight: 700;
+  color: var(--chalk); letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.panel-badge {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: .62rem;
+  padding: 2px 8px;
+  border: 2px solid var(--carbon-l);
+  color: var(--ink-l); font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+  transform: rotate(-1deg);
+  transition: all 0.05s;
+}
+.badge-ready {
+  border-color: var(--orange);
+  color: var(--orange);
+  background: rgba(232,93,4,.08);
+}
+
+.panel-body { padding: var(--s4); }
+
+/* ── 区块标签（橡皮章风格）── */
+.format-section-label {
+  font-family: var(--font-mono); font-size: .68rem; font-weight: 700;
+  color: var(--carbon); letter-spacing: .05em;
+  text-transform: uppercase;
+  margin-bottom: var(--s2);
+  display: inline-block;
+  padding: 2px 8px;
+  border: 2px solid var(--carbon);
+  transform: rotate(-0.5deg);
+}
+.format-section-label span {
+  font-family: var(--font-ui); font-weight: 400; text-transform: none;
+  letter-spacing: 0; color: var(--ink-m); font-size: .7rem;
+}
+
+/* ── 上传区域 — 虚线工业框 ── */
+.upload-zone {
+  border: 2px dashed var(--carbon-l);
+  padding: var(--s5) var(--s4);
+  text-align: center; cursor: pointer;
+  background: var(--concrete-l);
+  margin-bottom: var(--s3);
+  transition: border-color 0.05s, background 0.05s;
+}
+.upload-zone:hover {
+  border-color: var(--orange);
+  border-style: solid;
+}
+.upload-zone.drag-over {
+  border-color: var(--orange);
+  border-style: solid;
+  background: rgba(232,93,4,.06);
+}
+.upload-icon { font-family: var(--font-mono); font-size: 2rem; display: block; margin-bottom: var(--s2); }
+.upload-text { font-family: var(--font-mono); font-size: .75rem; color: var(--carbon); font-weight: 700; letter-spacing: .03em; }
+.upload-hint { font-family: var(--font-mono); font-size: .6rem; color: var(--ink-m); margin-top: 2px; letter-spacing: .03em; text-transform: uppercase; }
+.upload-input { display: none; }
+
+.uploaded-info {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  background: #1a1a1a;
+  border: 2px solid var(--carbon);
+  font-family: var(--font-mono);
+}
+.uploaded-info .check { color: var(--orange); font-weight: 700; font-size: 1rem; }
+.uploaded-name { font-weight: 700; font-size: .72rem; flex: 1; color: var(--chalk); letter-spacing: .03em; }
+.uploaded-remove {
+  background: none; border: 2px solid var(--carbon-l); color: var(--ink-l);
+  cursor: pointer; font-family: var(--font-mono); font-size: .7rem; font-weight: 700;
+  padding: 2px 8px;
+  transition: all 0.05s;
+}
+.uploaded-remove:hover { border-color: var(--orange); color: var(--orange); }
+
+/* ── 格式文本输入 ── */
+.format-textarea {
+  width: 100%; min-height: 80px;
+  border: 2px solid var(--carbon);
+  padding: var(--s3) var(--s4);
+  font-family: var(--font-mono); font-size: .75rem;
+  line-height: 1.6; color: var(--carbon);
+  background: var(--chalk);
+  resize: vertical;
+  transition: border-color 0.05s;
+}
+.format-textarea:focus {
+  outline: none;
+  border-color: var(--orange);
+}
+.format-textarea::placeholder {
+  font-family: var(--font-mono); font-size: .65rem;
+  color: var(--ink-l); letter-spacing: .02em;
+}
+
+/* ── 格式预览 — 数据表格风格 ── */
+.format-preview { margin-top: var(--s4); display: none; }
+.format-preview.visible { display: block; }
+.format-preview-title {
+  font-family: var(--font-mono); font-size: .65rem; font-weight: 700;
+  color: var(--carbon); letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-bottom: var(--s2);
+}
+.format-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; }
+.format-chip {
+  background: var(--concrete-l);
+  padding: var(--s3);
+  border-bottom: 2px solid var(--carbon-l);
+}
+.format-chip-label {
+  font-family: var(--font-mono); font-size: .58rem;
+  color: var(--ink-l); letter-spacing: .06em;
+  text-transform: uppercase; margin-bottom: 2px;
+}
+.format-chip-value {
+  font-family: var(--font-mono); font-size: .7rem;
+  font-weight: 700; color: var(--carbon);
+}
+
+/* ═══════════════════════════════════════════════════════
+   CONTENT EDITOR — 打字机风格
+   ═══════════════════════════════════════════════════════ */
+.editor-toolbar {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  background: var(--carbon);
+  margin-bottom: var(--s3);
+  flex-wrap: wrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.editor-hint {
+  font-family: var(--font-mono); font-size: .62rem;
+  color: var(--ink-l); letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.content-textarea {
+  width: 100%; min-height: 400px;
+  border: 2px solid var(--carbon);
+  padding: var(--s4);
+  font-family: var(--font-mono); font-size: .78rem;
+  line-height: 1.75; color: var(--carbon);
+  background: var(--chalk);
+  resize: vertical;
+  transition: border-color 0.05s;
+  tab-size: 2;
+}
+.content-textarea:focus {
+  outline: none;
+  border-color: var(--orange);
+}
+.content-textarea::placeholder {
+  font-family: var(--font-mono); font-size: .68rem;
+  color: var(--ink-l); opacity: .6;
+}
+
+/* 统计 — 等宽数字仪表 */
+.content-stats {
+  display: flex; gap: var(--s5);
+  margin-top: var(--s2);
+  font-family: var(--font-mono); font-size: .65rem; color: var(--ink-l);
+  letter-spacing: .04em; text-transform: uppercase;
+}
+.content-stats span { display: flex; align-items: center; gap: 6px; }
+.content-stats span span {
+  font-weight: 700; color: var(--carbon);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════════════
+   TIPS — 工业通知
+   ═══════════════════════════════════════════════════════ */
+.tips-panel {
+  margin-top: var(--s4);
+  border: 2px solid var(--yellow);
+  border-left: 8px solid var(--yellow);
+  background: var(--yellow-p);
+  padding: var(--s3) var(--s4);
+}
+.tips-title {
+  font-family: var(--font-mono); font-size: .65rem; font-weight: 700;
+  color: var(--carbon); letter-spacing: .06em;
+  text-transform: uppercase; margin-bottom: var(--s1);
+}
+.tips-list {
+  font-family: var(--font-ui); font-size: .7rem; color: var(--carbon-l);
+  line-height: 1.6; padding-left: 1.2rem;
+}
+.tips-list code {
+  font-family: var(--font-mono); font-size: .62rem;
+  background: rgba(0,0,0,.06); padding: 1px 4px;
+  border: 1px solid rgba(0,0,0,.1);
+}
+
+/* ═══════════════════════════════════════════════════════
+   GENERATE — 工业按钮（无圆角、无渐变、无阴影）
+   ═══════════════════════════════════════════════════════ */
+.generate-section {
+  max-width: 1300px; margin: 0 auto;
+  padding: var(--s4) var(--s5) var(--s8);
+  text-align: center;
+  position: relative; z-index: 1;
+}
+
+.btn-generate {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 14px 48px;
+  font-family: var(--font-mono); font-size: .9rem; font-weight: 700;
+  color: var(--chalk);
+  background: var(--orange);
+  border: 2px solid var(--orange);
+  cursor: pointer;
+  letter-spacing: .06em; text-transform: uppercase;
+  transition: background 0.05s, color 0.05s;
+}
+.btn-generate:hover {
+  background: var(--carbon);
+  border-color: var(--carbon);
+  color: var(--orange);
+}
+.btn-generate:active {
+  background: #000;
+}
+.btn-generate:disabled {
+  opacity: .3; cursor: not-allowed;
+}
+.btn-icon { font-size: 1.1rem; }
+
+/* 下载卡片 */
+.download-area { display: none; margin-top: var(--s5); }
+.download-area.visible { display: block; }
+.download-card {
+  display: inline-flex; align-items: center; gap: var(--s4);
+  border: 2px solid var(--carbon);
+  padding: var(--s4) var(--s5);
+  background: var(--chalk);
+}
+.download-card .icon { font-family: var(--font-mono); font-size: 1.8rem; font-weight: 700; color: var(--orange); }
+.download-info { text-align: left; }
+.download-info .title {
+  font-family: var(--font-mono); font-size: .78rem; font-weight: 700;
+  color: var(--carbon); letter-spacing: .03em; text-transform: uppercase;
+}
+.download-info .desc {
+  font-family: var(--font-mono); font-size: .62rem; color: var(--ink-m); letter-spacing: .02em;
+}
+.btn-download {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 20px;
+  background: var(--carbon); color: var(--chalk);
+  border: 2px solid var(--carbon);
+  font-family: var(--font-mono); font-size: .7rem; font-weight: 700;
+  cursor: pointer; text-decoration: none;
+  letter-spacing: .04em; text-transform: uppercase;
+  transition: background 0.05s;
+}
+.btn-download:hover { background: var(--orange); border-color: var(--orange); }
+
+/* ═══════════════════════════════════════════════════════
+   TOAST — 硬边通知
+   ═══════════════════════════════════════════════════════ */
+.toast {
+  position: fixed; top: 70px; right: var(--s5); z-index: 1000;
+  padding: var(--s3) var(--s4);
+  font-family: var(--font-mono); font-size: .7rem; font-weight: 700;
+  border: 2px solid var(--carbon);
+  letter-spacing: .03em; text-transform: uppercase;
+}
+.toast.error { background: var(--chalk); color: var(--orange); border-color: var(--orange); }
+.toast.success { background: var(--carbon); color: var(--chalk); }
+.toast.info { background: var(--chalk); color: var(--carbon); }
+
+/* ═══════════════════════════════════════════════════════
+   SPINNER — 工业旋转指示器
+   ═══════════════════════════════════════════════════════ */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  animation: spin .8s linear infinite;
+}
+
+/* ═══════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════ */
+footer {
+  text-align: center;
+  padding: var(--s3) var(--s5) var(--s5);
+  font-family: var(--font-mono); font-size: .6rem;
+  color: var(--ink-l); letter-spacing: .05em;
+  text-transform: uppercase;
+  position: relative; z-index: 1;
+}
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE — 移动优先，4 级断点
+   ═══════════════════════════════════════════════════════ */
+
+/* ── ≤1200px: 缩窄最大宽度 ── */
+@media (max-width: 1200px) {
+  .header-inner, main, .generate-section { max-width: 960px; }
+  .panels { gap: var(--s4); }
+  .offline-notice { max-width: 960px; }
+}
+
+/* ── ≤960px: 平板 — 双栏变单栏 ── */
+@media (max-width: 960px) {
+  .panels { grid-template-columns: 1fr; }
+  .steps { display: none; }
+  header { padding: 0 var(--s4); }
+  .header-inner { justify-content: center; }
+  .backend-bar { padding: 0 var(--s4); }
+  main { padding: var(--s4) var(--s4); }
+  .generate-section { padding: var(--s4) var(--s4) var(--s7); }
+  .page-subtitle { font-size: .68rem; }
+  .content-textarea { min-height: 320px; }
+  .panel-body { padding: var(--s3); }
+  .offline-notice { margin: 0 var(--s4); padding: var(--s3) var(--s4); }
+}
+
+/* ── ≤768px: 大屏手机 — 进一步收紧 ── */
+@media (max-width: 768px) {
+  :root {
+    --s5: 20px; --s6: 24px; --s7: 36px; --s8: 48px;
+  }
+  header { padding: 0 var(--s3); height: auto; }
+  .header-inner { height: 46px; }
+  .brand-icon { font-size: 1rem; }
+  .backend-bar { padding: 0 var(--s3); }
+  .backend-bar-inner { height: 24px; }
+  .backend-label { font-size: .58rem; }
+  main { padding: var(--s3) var(--s3); }
+  .generate-section { padding: var(--s3) var(--s3) var(--s6); }
+  .format-textarea { min-height: 70px; }
+  .content-textarea { min-height: 300px; }
+  .editor-toolbar { padding: var(--s2); }
+  .tips-panel { padding: var(--s2) var(--s3); }
+  .download-card { flex-direction: column; text-align: center; gap: var(--s2); }
+  .offline-notice { margin: 0 var(--s3); padding: var(--s2) var(--s3); }
+}
+
+/* ── ≤480px: 小屏手机 — 全宽、大字号防缩放 ── */
+@media (max-width: 480px) {
+  :root {
+    --s3: 10px; --s4: 14px; --s5: 18px;
+  }
+  header { padding: 0 var(--s2); }
+  .header-inner { height: 42px; }
+  .brand-icon { font-size: .9rem; }
+  .brand-sub { display: none; }
+  .backend-bar { padding: 0 var(--s2); }
+  .backend-bar-inner { height: 22px; }
+  .backend-url { display: none; }
+
+  main { padding: var(--s3) var(--s2); }
+  .page-subtitle { font-size: .62rem; padding-left: var(--s1); }
+
+  .panels { gap: var(--s3); }
+
+  .panel-header { padding: var(--s2) var(--s3); }
+  .panel-title { font-size: .72rem; }
+  .panel-body { padding: var(--s2); }
+
+  /* 输入框字号 ≥16px —— 防止 iOS 自动缩放 */
+  .content-textarea {
+    font-size: 1rem !important;    /* 16px */
+    min-height: 260px;
+    padding: var(--s2);
+  }
+  .format-textarea {
+    font-size: 1rem !important;    /* 16px */
+    min-height: 60px;
+    padding: var(--s2);
+  }
+
+  /* 上传区 */
+  .upload-zone { padding: var(--s3) var(--s2); }
+  .upload-text { font-size: .72rem; }
+  .upload-icon { font-size: 1.5rem; }
+
+  /* 格式预览 */
+  .format-grid { grid-template-columns: 1fr; }
+  .format-chip { padding: var(--s2); }
+
+  /* 按钮 — 最小 44px 触摸目标 */
+  .btn-generate {
+    width: 100%; justify-content: center;
+    font-size: .85rem; padding: 14px 24px;
+    min-height: 48px;
+  }
+  .btn-download {
+    width: 100%; justify-content: center;
+    min-height: 44px; font-size: .75rem;
+  }
+
+  /* 统计 */
+  .content-stats { gap: var(--s3); font-size: .6rem; flex-wrap: wrap; }
+  .content-stats span { gap: 3px; }
+
+  /* Toast */
+  .toast { right: var(--s2); left: var(--s2); top: 55px; max-width: none; font-size: .65rem; }
+
+  /* 小贴士 */
+  .tips-list { font-size: .65rem; }
+
+  /* 下载卡片 */
+  .download-card { width: 100%; padding: var(--s3); }
+  .download-info .title { font-size: .72rem; }
+  .download-info .desc { font-size: .6rem; }
+
+  /* 离线提示 */
+  .offline-notice { margin: 0 var(--s2); padding: var(--s2); }
+  .offline-notice-title { font-size: .68rem; }
+  .offline-notice-body { font-size: .6rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ BACKEND STATUS BAR -->
+<div class="backend-bar" id="backendBar">
+  <div class="backend-bar-inner">
+    <div class="backend-status">
+      <span class="backend-dot checking" id="backendDot"></span>
+      <span class="backend-label" id="backendLabel">检测后端...</span>
+    </div>
+    <span class="backend-url" id="backendUrl"></span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ OFFLINE NOTICE -->
+<div class="offline-notice visible" id="offlineNotice">
+  <div class="offline-notice-title">
+    <span class="icon">[!]</span> 后端未启用
+  </div>
+  <div class="offline-notice-body">
+    请先在本地启动后端服务，然后刷新页面。<br>
+    <strong>启动方式：</strong>在项目目录运行 <code>start.bat</code>，或执行：<br>
+    <code>cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000</code><br>
+    启动后后端地址默认为 <a href="http://localhost:8000" target="_blank">http://localhost:8000</a>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ HEADER -->
+<header>
+  <div class="header-inner">
+    <a href="/" class="brand">
+      <span class="brand-icon">CFomatting</span>
+      <span class="brand-sub">文档格式引擎</span>
+    </a>
+    <div class="steps" id="stepIndicator">
+      <div class="step active" data-step="1"><span class="step-dot"></span> 设置格式</div>
+      <div class="step-connector"></div>
+      <div class="step" data-step="2"><span class="step-dot"></span> 粘贴内容</div>
+      <div class="step-connector"></div>
+      <div class="step" data-step="3"><span class="step-dot"></span> 生成下载</div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════ MAIN -->
+<main>
+  <p class="page-subtitle">上传范本 &amp; 粘贴教师要求 &amp; 粘贴内容 &rarr; 导出 .DOCX</p>
+
+  <div class="panels">
+    <!-- ── 左侧：格式面板 ── -->
+    <div>
+      <div class="panel" id="formatPanel">
+        <div class="panel-header">
+          <div class="panel-header-icon format">[格式]</div>
+          <div class="panel-title">格式设置</div>
+          <span class="panel-badge" id="formatBadge">未设置</span>
+        </div>
+        <div class="panel-body">
+          <div class="format-section-label">[1] 上传范本 <span>（提供封面和基础格式）</span></div>
+          <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+            <span class="upload-icon">[ + ]</span>
+            <div class="upload-text">点击或拖拽上传格式范本</div>
+            <div class="upload-hint">.DOCX / .DOC &middot; 封面将被保留</div>
+          </div>
+          <input type="file" class="upload-input" id="fileInput" accept=".docx,.doc">
+          <div id="uploadedStatus" style="display:none;"></div>
+
+          <div class="format-section-label" style="margin-top:var(--s4)">[2] 教师格式要求 <span>（可选 &middot; 覆盖范本对应格式）</span></div>
+          <textarea class="format-textarea" id="formatTextInput"
+            placeholder="例如：正文：宋体 12pt 1.5倍行距&#10;一级标题：黑体 16pt 加粗&#10;（留空则使用范本中的格式）"
+          ></textarea>
+
+          <div class="format-preview" id="formatPreview">
+            <div class="format-preview-title">// 当前格式规则</div>
+            <div class="format-grid" id="formatGrid"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tips-panel">
+        <div class="tips-title">// 使用说明</div>
+        <ul class="tips-list">
+          <li><strong>完整模式：</strong>上传范本（保留封面）+ 粘贴教师要求（覆盖格式）&rarr; 最精准</li>
+          <li><strong>仅范本：</strong>上传范本即可，格式自动提取</li>
+          <li><strong>仅文字：</strong>没范本也行，粘贴教师要求 + 内容 &rarr; 生成</li>
+          <li>自动识别标题：<code>第X章</code> <code>一、</code> <code>（一）</code> <code>1.1</code> 等</li>
+          <li><code>Ctrl+Enter</code> 直接生成</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ── 右侧：内容面板 ── -->
+    <div>
+      <div class="panel" id="contentPanel">
+        <div class="panel-header">
+          <div class="panel-header-icon content">[内容]</div>
+          <div class="panel-title">内容粘贴</div>
+          <span class="panel-badge" id="contentBadge">待编辑</span>
+        </div>
+        <div class="panel-body">
+          <div class="editor-toolbar">
+            <span class="editor-hint">// 粘贴文本 &mdash; 自动识别标题结构</span>
+          </div>
+
+          <textarea class="content-textarea" id="contentEditor"
+            placeholder="在这里粘贴你的论文或报告内容...
+
+例如：
+
+第一章 绪论
+
+这是你的报告正文。系统会自动从纯文本中检测章节标题、编号和段落结构。
+
+一、研究背景
+
+传统方法依赖特征工程和机器学习算法...
+
+（一）具体目标
+
+掌握行业内常用工具和软件的使用方法...
+
+1.1 研究方法
+
+深度学习模型学习层次化表示...
+"
+          ></textarea>
+
+          <div class="content-stats" id="contentStats">
+            <span>字数 <span id="charCount">0</span></span>
+            <span>段落 <span id="paraCount">0</span></span>
+            <span>标题 <span id="headingCount">0</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ═══════════════════════════════════════════════════════ GENERATE -->
+<div class="generate-section">
+  <button class="btn-generate" id="btnGenerate" onclick="generateDocument()">
+    <span class="btn-icon">></span> 生成文档
+  </button>
+  <div class="download-area" id="downloadArea">
+    <div class="download-card">
+      <span class="icon">OK</span>
+      <div class="download-info">
+        <div class="title">文档生成完成</div>
+        <div class="desc" id="downloadDesc"></div>
+      </div>
+      <a class="btn-download" id="btnDownload" href="#" download>下载 .DOCX</a>
+    </div>
+  </div>
+</div>
+
+<footer>CFomatting &middot; 文档格式引擎 &middot; V1.0</footer>
+
+<!-- ═══════════════════════════════════════════════════════ SCRIPTS -->
+<script>
+// ═══════════════════════════════════════════════════════
+// 后端地址配置 — 本地后端默认 http://localhost:8000
+// ═══════════════════════════════════════════════════════
+var BACKEND_URL = (function(){
+  // URL 参数优先: ?backend=http://192.168.1.100:8000
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('backend')) return params.get('backend');
+  // localStorage 次之
+  var saved = localStorage.getItem('cf_backend_url');
+  if (saved) return saved;
+  // 默认本地后端
+  return 'http://localhost:8000';
+})();
+
+// 保存 backend URL 到 localStorage
+localStorage.setItem('cf_backend_url', BACKEND_URL);
+
+var backendOnline = false;
+var backendChecking = true;
+
+// ── 后端健康检查 ──
+function checkBackend() {
+  backendChecking = true;
+  updateBackendUI();
+  fetch(BACKEND_URL + '/api/health')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.status === 'ok') {
+        backendOnline = true;
+        backendChecking = false;
+        updateBackendUI();
+        // 后端恢复后尝试恢复会话
+        restoreSession();
+      } else {
+        setBackendOffline();
+      }
+    })
+    .catch(function(){
+      setBackendOffline();
+    });
+}
+
+function setBackendOffline() {
+  backendOnline = false;
+  backendChecking = false;
+  updateBackendUI();
+}
+
+function updateBackendUI() {
+  var dot = document.getElementById('backendDot');
+  var label = document.getElementById('backendLabel');
+  var urlEl = document.getElementById('backendUrl');
+  var notice = document.getElementById('offlineNotice');
+
+  urlEl.textContent = BACKEND_URL;
+
+  if (backendChecking) {
+    dot.className = 'backend-dot checking';
+    label.textContent = '检测后端...';
+    label.className = 'backend-label';
+  } else if (backendOnline) {
+    dot.className = 'backend-dot online';
+    label.textContent = '后端已连接';
+    label.className = 'backend-label online';
+    if (notice) notice.classList.remove('visible');
+  } else {
+    dot.className = 'backend-dot offline';
+    label.textContent = '后端未启用';
+    label.className = 'backend-label';
+    if (notice) notice.classList.add('visible');
+  }
+}
+
+// ── 带后端检测的 fetch 封装 ──
+function apiFetch(path, options) {
+  return fetch(BACKEND_URL + path, options)
+    .then(function(r){
+      if (!r.ok) {
+        return r.json().then(function(e){
+          throw new Error(e.detail || '请求失败 (' + r.status + ')');
+        });
+      }
+      return r.json();
+    })
+    .catch(function(err){
+      // 网络错误 → 标记后端离线
+      if (err instanceof TypeError || err.message === 'Failed to fetch') {
+        setBackendOffline();
+        throw new Error('后端未启用 — 请先启动本地后端（运行 start.bat）');
+      }
+      throw err;
+    });
+}
+
+// ── 应用状态 ──
+var state = {
+  sessionId: localStorage.getItem('cf_session_id') || '',
+  hasFormat: false, formatSource: '', formatRules: null,
+  fileId: null, isGenerating: false,
+};
+
+// ── 启动时检查后端 + 恢复会话 ──
+checkBackend();
+
+// 每 30 秒检查一次后端状态
+setInterval(checkBackend, 30000);
+
+function restoreSession() {
+  if (state.sessionId) {
+    apiFetch('/api/session/' + state.sessionId)
+      .then(function(d){
+        if (d.exists && d.has_sample) {
+          state.hasFormat = true; state.formatSource = 'sample';
+          showUploadedStatus(d.sample_name);
+          updateStep(1,'done'); updateStep(2,'active');
+        }
+      })
+      .catch(function(){});  // 静默失败
+  }
+}
+
+function updateStep(num, status) {
+  var el = document.querySelector('.step[data-step="' + num + '"]');
+  if (el) el.className = 'step ' + status;
+}
+
+function showToast(msg, type) {
+  var t = document.querySelector('.toast'); if (t) t.remove();
+  var d = document.createElement('div');
+  d.className = 'toast ' + (type || 'info'); d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(function(){ d.remove(); }, 4000);
+}
+
+function updateFormatBadge() {
+  var badge = document.getElementById('formatBadge');
+  var hasSample = state.hasFormat && state.formatSource === 'sample';
+  var hasText = document.getElementById('formatTextInput').value.trim().length > 10;
+  if (hasSample && hasText) { badge.textContent = '范本+教师'; badge.className = 'panel-badge badge-ready'; state.formatSource = 'hybrid'; }
+  else if (hasSample) { badge.textContent = '范本已载入'; badge.className = 'panel-badge badge-ready'; }
+  else if (hasText) { badge.textContent = '文本规则'; badge.className = 'panel-badge badge-ready'; }
+  else { badge.textContent = '未设置'; badge.className = 'panel-badge'; }
+}
+
+// ── FILE UPLOAD ──
+var uploadZone = document.getElementById('uploadZone');
+var fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('dragover', function(e){ e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', function(){ uploadZone.classList.remove('drag-over'); });
+uploadZone.addEventListener('drop', function(e){
+  e.preventDefault(); uploadZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', function(){
+  if (fileInput.files.length) handleFile(fileInput.files[0]);
+});
+
+async function handleFile(file) {
+  if (!backendOnline) { showToast('后端未启用 — 请先启动后端', 'error'); return; }
+  if (!file.name.match(/\.(docx|doc)$/i)) { showToast('仅支持 .DOCX / .DOC', 'error'); return; }
+  uploadZone.innerHTML = '<span class="spinner"></span><div class="upload-text" style="margin-top:8px">提取格式中...</div>';
+  var fd = new FormData();
+  fd.append('file', file); fd.append('session_id', state.sessionId);
+  try {
+    var d = await apiFetch('/api/upload-sample', { method: 'POST', body: fd });
+    state.sessionId = d.session_id; state.hasFormat = true; state.formatSource = 'sample';
+    state.formatRules = d.format_rules;
+    localStorage.setItem('cf_session_id', state.sessionId);
+    showUploadedStatus(d.sample_name);
+    showFormatPreview(d.format_rules);
+    showToast('格式提取成功', 'success');
+    updateStep(1,'done'); updateStep(2,'active');
+  } catch(e) {
+    showToast('错误: ' + e.message, 'error');
+    uploadZone.innerHTML = '<span class="upload-icon">[ + ]</span><div class="upload-text">点击或拖拽上传格式范本</div><div class="upload-hint">.DOCX / .DOC &middot; 封面将被保留</div>';
+  }
+}
+
+function showUploadedStatus(name) {
+  uploadZone.style.display = 'none';
+  var st = document.getElementById('uploadedStatus');
+  st.style.display = 'block';
+  st.innerHTML = '<div class="uploaded-info"><span class="check">[OK]</span><span class="uploaded-name">' + escHtml(name) + ' &mdash; 封面将被保留</span><button class="uploaded-remove" onclick="removeFormat()">[X]</button></div>';
+  updateFormatBadge();
+}
+
+function removeFormat() {
+  state.hasFormat = false; state.formatRules = null;
+  document.getElementById('uploadedStatus').style.display = 'none';
+  uploadZone.style.display = '';
+  uploadZone.innerHTML = '<span class="upload-icon">[ + ]</span><div class="upload-text">点击或拖拽上传格式范本</div><div class="upload-hint">.DOCX / .DOC &middot; 封面将被保留</div>';
+  document.getElementById('formatPreview').classList.remove('visible');
+  updateFormatBadge();
+  updateStep(1,'active'); updateStep(2,'');
+}
+
+function showFormatPreview(rules) {
+  var preview = document.getElementById('formatPreview');
+  var grid = document.getElementById('formatGrid');
+  preview.classList.add('visible');
+  var styles = rules.styles || {};
+  var chips = [];
+  var labelMap = { 'Title': '文档标题', 'Heading1': '一级标题', 'Heading2': '二级标题', 'Heading3': '三级标题', 'Heading4': '四级标题', 'Normal': '正文' };
+  for (var key in labelMap) {
+    var style = styles[key]; if (!style) continue;
+    var f = style.font || {}; var p = style.paragraph || {};
+    var parts = [];
+    if (f.font_name) parts.push(f.font_name);
+    if (f.font_size) parts.push(f.font_size + 'pt');
+    if (f.bold) parts.push('加粗');
+    if (p.line_spacing) parts.push(p.line_spacing + '倍行距');
+    chips.push('<div class="format-chip"><div class="format-chip-label">' + labelMap[key] + '</div><div class="format-chip-value">' + (parts.join(' | ') || '--') + '</div></div>');
+  }
+  var hf = rules.header_footer || {};
+  if (hf.header_text) chips.push('<div class="format-chip"><div class="format-chip-label">页眉</div><div class="format-chip-value">' + escHtml(hf.header_text.substring(0,20)) + '...</div></div>');
+  if (hf.has_page_number) chips.push('<div class="format-chip"><div class="format-chip-label">页码</div><div class="format-chip-value">底端' + (hf.page_number_position || '右侧') + '</div></div>');
+  grid.innerHTML = chips.join('');
+}
+
+// ── CONTENT EDITOR ──
+var editor = document.getElementById('contentEditor');
+if (editor) {
+  editor.addEventListener('input', function(){
+    try {
+      var text = editor.value;
+      var chars = text.replace(/\s/g,'').length;
+      var lines = text.split('\n').filter(function(l){ return l.trim(); });
+      var headings = lines.filter(function(l){
+        return /^第[一二三四五六七八九十\d]+[章节]/.test(l.trim()) ||
+               /^[一二三四五六七八九十]+[、，,]/.test(l.trim()) ||
+               /^[（(][一二三四五六七八九十\d]+[）)]/.test(l.trim()) ||
+               /^\d+(?:\.\d+)*[.)、\s]/.test(l.trim()) ||
+               /^#{1,6}\s/.test(l.trim());
+      });
+      var charEl = document.getElementById('charCount');
+      var paraEl = document.getElementById('paraCount');
+      var headEl = document.getElementById('headingCount');
+      if (charEl) charEl.textContent = chars;
+      if (paraEl) paraEl.textContent = Math.max(0, lines.length - headings.length);
+      if (headEl) headEl.textContent = headings.length;
+      var badge = document.getElementById('contentBadge');
+      if (badge) {
+        if (chars > 0) { badge.textContent = chars + ' 字'; badge.className = 'panel-badge badge-ready'; updateStep(2,'done'); updateStep(3,'active'); }
+        else { badge.textContent = '待编辑'; badge.className = 'panel-badge'; }
+      }
+    } catch(e) { console.error(e); }
+  });
+}
+
+// ── GENERATE ──
+async function generateDocument() {
+  if (!backendOnline) { showToast('后端未启用 — 请先启动后端（运行 start.bat）', 'error'); return; }
+  var content = editor.value.trim();
+  if (!content) { showToast('请先粘贴内容', 'error'); editor.focus(); return; }
+  if (state.isGenerating) return;
+  state.isGenerating = true;
+  var btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 生成中...';
+  document.getElementById('downloadArea').classList.remove('visible');
+  try {
+    var body = { session_id: state.sessionId, content: content, content_type: 'auto' };
+    var formatText = document.getElementById('formatTextInput').value.trim();
+    if (formatText) body.text_rules = formatText;
+    var d = await apiFetch('/api/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    state.fileId = d.file_id;
+    // 下载链接需要拼接后端地址
+    document.getElementById('btnDownload').href = BACKEND_URL + d.download_url;
+    var stats = d.stats || {};
+    document.getElementById('downloadDesc').textContent = (stats.total_chars || 0) + ' 字 | ' + (stats.heading_count || 0) + ' 标题 | ' + (stats.paragraph_count || 0) + ' 段落';
+    document.getElementById('downloadArea').classList.add('visible');
+    updateStep(3,'done');
+    showToast('文档生成成功', 'success');
+  } catch(e) {
+    showToast('错误: ' + e.message, 'error');
+  } finally {
+    state.isGenerating = false;
+    btn.disabled = false;
+    btn.innerHTML = '<span class="btn-icon">></span> 生成文档';
+  }
+}
+
+// ── KEYBOARD ──
+document.addEventListener('keydown', function(e){
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); generateDocument(); }
+});
+
+// ── BTN FALLBACK ──
+(function(){
+  var gb = document.getElementById('btnGenerate');
+  if (gb && !gb._bound) { gb._bound = true; gb.addEventListener('click', generateDocument); }
+})();
+
+// ── FORMAT TEXT LIVE PREVIEW ──
+var formatTextTimer = null;
+var formatInput = document.getElementById('formatTextInput');
+if (formatInput) {
+  formatInput.addEventListener('input', function(){
+    updateFormatBadge();
+    clearTimeout(formatTextTimer);
+    formatTextTimer = setTimeout(function(){
+      var text = formatInput.value.trim();
+      if (text.length > 20) {
+        apiFetch('/api/parse-text-rules', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({session_id:'',text:text})
+        })
+        .then(function(d){
+          if (d.success && !state.hasFormat) {
+            var preview = document.getElementById('formatPreview');
+            var grid = document.getElementById('formatGrid');
+            preview.classList.add('visible');
+            var styles = d.format_rules.styles || {};
+            var chips = [];
+            var lm = {'Title':'文档标题','Heading1':'一级标题','Heading2':'二级标题','Heading3':'三级标题','Normal':'正文'};
+            for (var k in lm) { var s = styles[k]; if (!s) continue; var f = s.font||{}, p = s.paragraph||{}; var pts = []; if (f.font_name) pts.push(f.font_name); if (f.font_size) pts.push(f.font_size+'pt'); if (f.bold) pts.push('加粗'); if (p.line_spacing) pts.push(p.line_spacing+'倍行距'); chips.push('<div class="format-chip"><div class="format-chip-label">'+lm[k]+'</div><div class="format-chip-value">'+(pts.join(' | ')||'--')+'</div></div>'); }
+            if (chips.length) grid.innerHTML = chips.join('');
+          }
+        }).catch(function(){});
+      }
+    }, 600);
+  });
+}
+
+function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+
+</body>
+</html>
