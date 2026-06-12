@@ -32,28 +32,31 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^"
     Write-Host ''; ^
     ^
     Write-Host '[3/3] 更新 GitHub 指针...' -ForegroundColor Gray; ^
-    ^$tmpFile = New-TemporaryFile; ^
-    Set-Content -Path ^$tmpFile -Value ^$url -NoNewline; ^
-    ^
-    ^$env:PATH = 'C:\Program Files\GitHub CLI;' + ^$env:PATH; ^
-    ^$env:http_proxy = 'http://127.0.0.1:7897'; ^
-    ^$env:https_proxy = 'http://127.0.0.1:7897'; ^
-    ^
-    ^$result = ^& 'C:\Program Files\GitHub CLI\gh.exe' api ^
-      --method PUT ^
-      -H 'Accept: application/vnd.github+json' ^
-      /repos/3432926599-cyber/cfomatting-word/contents/backend-url.txt ^
-      -f message='Update tunnel URL' ^
-      -f content=^(Get-Content ^$tmpFile -Raw)^
-      -f branch='main' ^
-      2^>^&1; ^
-    ^
-    if (^$LASTEXITCODE -eq 0) { ^
+    try { ^
+      ^$settings = Get-Content -Path ^"^$env:USERPROFILE\.claude\settings.json^" -Raw | ConvertFrom-Json; ^
+      ^$token = ^$settings.env.GH_TOKEN; ^
+      if (-not ^$token) { throw 'Token not found' }; ^
+      ^
+      ^$headers = @{ ^
+        Authorization = ^"Bearer ^$token^"; ^
+        Accept = 'application/vnd.github+json' ^
+      }; ^
+      ^
+      ^$apiBase = 'https://api.github.com/repos/3432926599-cyber/cfomatting-word/contents/backend-url.txt'; ^
+      ^
+      ^$current = Invoke-RestMethod -Uri ^$apiBase -Headers ^$headers -Method Get -Proxy 'http://127.0.0.1:7897' -ErrorAction Stop; ^
+      ^$sha = ^$current.sha; ^
+      ^
+      ^$content = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(^$url)); ^
+      ^$body = @{ message = 'Update tunnel URL'; content = ^$content; sha = ^$sha; branch = 'main' } | ConvertTo-Json; ^
+      ^
+      Invoke-RestMethod -Uri ^$apiBase -Headers ^$headers -Method Put -Body ^$body -ContentType 'application/json' -Proxy 'http://127.0.0.1:7897' -ErrorAction Stop ^| Out-Null; ^
+      ^
       Write-Host '   已更新 GitHub 指针 ✓' -ForegroundColor Green; ^
-    } else { ^
-      Write-Host '   更新 GitHub 失败（不影响使用）' -ForegroundColor Yellow; ^
+    } catch { ^
+      Write-Host ('   更新 GitHub 失败: ' + ^$_.Exception.Message) -ForegroundColor Yellow; ^
+      Write-Host '   （不影响使用，链接已复制到剪贴板）' -ForegroundColor Gray; ^
     } ^
-    Remove-Item ^$tmpFile; ^
     ^
     Write-Host ''; ^
     Write-Host '  直接粘贴到微信发送即可（链接已复制）'; ^
