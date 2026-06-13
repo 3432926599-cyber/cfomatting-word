@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <title>CFomatting — 文档格式自动化</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -55,7 +55,7 @@
   position: sticky; top: 0; z-index: 200;
 }
 .backend-bar-inner {
-  max-width: 1300px; margin: 0 auto;
+  max-width: 1100px; margin: 0 auto;
   display: flex; align-items: center; justify-content: space-between;
   height: 28px;
 }
@@ -94,7 +94,7 @@
 .offline-notice {
   display: none;
   margin: 0 var(--s5);
-  max-width: 1300px;
+  max-width: 1100px;
   margin-left: auto; margin-right: auto;
   padding: var(--s4) var(--s5);
   border: 2px solid var(--red);
@@ -153,6 +153,18 @@
 .offline-notice-btn:hover { background: var(--orange); border-color: var(--orange); }
 
 /* ═══════════════════════════════════════════════════════
+   ACCESSIBILITY — 可访问性 & 动效削减
+   ═══════════════════════════════════════════════════════ */
+:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
    BASE — 混凝土底色
    ═══════════════════════════════════════════════════════ */
 html { font-size: 16px; }
@@ -160,8 +172,9 @@ body {
   font-family: var(--font-ui);
   background: var(--concrete);
   color: var(--ink);
-  line-height: 1.5;
+  line-height: 1.6;
   min-height: 100dvh;
+  min-height: calc(var(--vh, 1vh) * 100);
   -webkit-font-smoothing: antialiased;
   /* 安全区适配（刘海屏） */
   padding-top: env(safe-area-inset-top);
@@ -170,6 +183,12 @@ body {
   padding-right: env(safe-area-inset-right);
   /* iOS 平滑滚动 */
   -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  /* 禁止微信下拉刷新 */
+  overscroll-behavior-y: contain;
+  /* 禁止微信缩放字体 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* 所有可点击元素 — 消除 300ms 延迟 */
@@ -197,7 +216,7 @@ header {
   border-bottom: 3px solid var(--orange);
 }
 .header-inner {
-  max-width: 1300px; margin: 0 auto;
+  max-width: 1100px; margin: 0 auto;
   display: flex; align-items: center; justify-content: space-between;
   height: 52px;
 }
@@ -249,7 +268,7 @@ header {
    MAIN — 全宽上下排列
    ═══════════════════════════════════════════════════════ */
 main {
-  max-width: 1300px; margin: 0 auto;
+  max-width: 1100px; margin: 0 auto;
   padding: var(--s5) var(--s5) var(--s4);
   position: relative; z-index: 1;
 }
@@ -495,7 +514,7 @@ main {
    GENERATE — 工业按钮（无圆角、无渐变、无阴影）
    ═══════════════════════════════════════════════════════ */
 .generate-section {
-  max-width: 1300px; margin: 0 auto;
+  max-width: 1100px; margin: 0 auto;
   padding: var(--s4) var(--s5) var(--s8);
   text-align: center;
   position: relative; z-index: 1;
@@ -712,6 +731,24 @@ footer {
   .offline-notice { margin: 0 var(--s2); padding: var(--s2); }
   .offline-notice-title { font-size: .68rem; }
   .offline-notice-body { font-size: .6rem; }
+  .offline-notice-input-row { flex-direction: column; }
+  .offline-notice-input { width: 100%; min-width: 0; font-size: 1rem; }
+  .offline-notice-btn { width: 100%; }
+
+  /* 使用 --vh 确保首屏高度正确（微信 X5） */
+  body { min-height: calc(var(--vh, 1vh) * 100); }
+
+  /* 后端状态栏 + header 双层固定 */
+  .backend-bar { position: sticky; top: 0; }
+  header { top: 22px; }
+}
+/* ── 微信等小屏超窄设备 ── */
+@media (max-width: 360px) {
+  :root { --s2: 6px; --s3: 8px; --s4: 10px; }
+  .brand-sub { display: none; }
+  .step { font-size: .58rem; }
+  .step-dot { width: 6px; height: 6px; }
+  .content-textarea { min-height: 220px; }
 }
 </style>
 </head>
@@ -877,6 +914,32 @@ footer {
 <footer>CFomatting &middot; 文档格式引擎 &middot; V1.0</footer>
 
 <!-- ═══════════════════════════════════════════════════════ SCRIPTS -->
+<script>
+// ═══════════════════════════════════════════════════════
+// 微信 X5 内核 & 移动端视口修复
+// ═══════════════════════════════════════════════════════
+(function(){
+  function setVh() {
+    var vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', vh + 'px');
+  }
+  setVh();
+  window.addEventListener('resize', function(){
+    requestAnimationFrame(setVh);
+  });
+  window.addEventListener('orientationchange', function(){
+    setTimeout(setVh, 100);
+  });
+  // 微信环境：X5 就绪后重算
+  if (window.WeixinJSBridge) {
+    try { WeixinJSBridge.invoke('getNetworkType', {}, setVh); } catch(e) {}
+  } else {
+    document.addEventListener('WeixinJSBridgeReady', function(){
+      try { WeixinJSBridge.invoke('getNetworkType', {}, setVh); } catch(e) {}
+    }, false);
+  }
+})();
+
 <script>
 // ═══════════════════════════════════════════════════════
 // 后端地址配置 — 优先级：URL参数 > localStorage > GitHub > localhost
