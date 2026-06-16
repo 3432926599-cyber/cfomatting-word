@@ -7,7 +7,7 @@
 <meta name="x5-fullscreen" content="true">
 <meta name="x5-page-mode" content="app">
 <meta name="format-detection" content="telephone=no,email=no">
-<title>CFomatting — 文档排版</title>
+<title>CFomatting — 文档格式匹配</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +16,7 @@
 <style>
 /* ═══════════════════════════════════════════════════════
    小红书杂志编辑风 · XHS Editorial
-   暖白底色 + 珊瑚红点缀 + 圆角卡片 + 松驰排版
+   暖白底色 + 珊瑚红点缀 + 圆角卡片 + 松驰节奏
    ═══════════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -627,7 +627,7 @@ footer {
   <div class="header-inner">
     <a href="/" class="brand">
       <span class="brand-icon">CF<em>ormatting</em></span>
-      <span class="brand-sub">文档排版</span>
+      <span class="brand-sub">格式匹配</span>
     </a>
     <div class="steps" id="stepIndicator">
       <div class="step active" data-step="1"><span class="step-num">1</span> 设置格式</div>
@@ -641,7 +641,7 @@ footer {
 
 <!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
 <main>
-  <p class="page-subtitle">上传参考文档，粘贴论文内容，<br>一键生成排版精美的 Word 文档</p>
+  <p class="page-subtitle">上传参考文档，粘贴论文内容，<br>自动匹配格式，生成规范 Word 文档</p>
 
   <div class="panels">
     <!-- 格式面板 -->
@@ -731,13 +731,13 @@ footer {
 <!-- ═══════════════════════════════ GENERATE ═══════════════════════════════ -->
 <div class="generate-section">
   <button class="btn-generate" id="btnGenerate">
-    开始排版
+    生成文档
   </button>
   <div class="download-area" id="downloadArea">
     <div class="download-card">
       <span class="dl-icon">✓</span>
       <div class="download-info">
-        <div class="title">排版完成</div>
+        <div class="title">文档已生成</div>
         <div class="desc" id="downloadDesc"></div>
       </div>
       <a class="btn-download" id="btnDownload" href="#" download>下载文档</a>
@@ -745,7 +745,7 @@ footer {
   </div>
 </div>
 
-<footer>CFormatting · 让每一篇论文都有好格式</footer>
+<footer>CFormatting · 从参考文档到规范输出，格式自动匹配</footer>
 
 <!-- ═══════════════════════════════ LIBRARIES ═══════════════════════════════ -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -2545,7 +2545,7 @@ const DocxGenerator = (function(){
     if (btn._generating) return;
     btn._generating = true;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> 排版中...';
+    btn.innerHTML = '<span class="spinner"></span> 生成中...';
     document.getElementById('downloadArea').classList.remove('visible');
 
     try {
@@ -2612,7 +2612,7 @@ const DocxGenerator = (function(){
       document.getElementById('downloadArea').classList.add('visible');
       updateStep(3, 'done');
 
-      showToast('文档排版完成', 'success');
+      showToast('文档生成完成', 'success');
 
       if (downloadBtn._oldUrl) URL.revokeObjectURL(downloadBtn._oldUrl);
       downloadBtn._oldUrl = url;
@@ -2623,7 +2623,7 @@ const DocxGenerator = (function(){
     } finally {
       btn._generating = false;
       btn.disabled = false;
-      btn.innerHTML = '开始排版';
+      btn.innerHTML = '生成文档';
     }
   };
 
