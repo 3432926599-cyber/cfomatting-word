@@ -70,7 +70,7 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const signUrl = url.searchParams.get('url') || '';
 
-  const appId = env.WX_APP_ID || 'wx8327db055b0ffc4a';
+  const appId = env.WX_APP_ID || 'wx52f55029c4340a68';
   const appSecret = env.WX_APP_SECRET;
 
   if (!appSecret) {
