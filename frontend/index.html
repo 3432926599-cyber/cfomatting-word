@@ -693,7 +693,7 @@ footer {
         </div>
         <div class="panel-body">
           <div class="format-section-label">上传参考文档 <span>提取封面和基础格式</span></div>
-          <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+          <div class="upload-zone" id="uploadZone">
             <span class="upload-icon">＋</span>
             <div class="upload-text">点击或拖拽上传 .docx 文件</div>
             <div class="upload-hint">上传后会自动提取文档中的字体、字号、页边距等格式信息</div>
@@ -793,6 +793,7 @@ footer {
 <footer>CFormatting · 从参考文档到规范输出，格式自动匹配</footer>
 
 <!-- ═══════════════════════════════ LIBRARIES ═══════════════════════════════ -->
+<script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
   if (typeof JSZip === 'undefined') {
@@ -817,12 +818,13 @@ footer {
    依赖：JSZip（读取/写入 .docx ZIP 包）
 
    模块：
-     A. 微信视口修复 (WeChat Viewport Fix)
-     B. 格式提取器   (FormatExtractor)
-     C. 文本规则解析器 (TextRuleParser)
-     D. 内容解析器    (ContentParser)
-     E. DOCX 生成器   (DocxGenerator)
-     F. UI 控制器     (UIController)
+     A. 微信视口修复   (WeChat Viewport Fix)
+     B. 微信 JS-SDK    (WechatSDK)
+     C. 格式提取器     (FormatExtractor)
+     D. 文本规则解析器  (TextRuleParser)
+     E. 内容解析器     (ContentParser)
+     F. DOCX 生成器    (DocxGenerator)
+     G. UI 控制器      (UIController)
    ═══════════════════════════════════════════════════════════════════ */
 
 "use strict";
@@ -848,7 +850,109 @@ footer {
 
 
 /* ═══════════════════════════════════════════════════════════════════
-   B. 格式提取器 — 从 .docx 范本中提取字体/字号/行距/页边距等
+   B. 微信 JS-SDK 初始化 — 签名 + wx.chooseMessageFile
+   ═══════════════════════════════════════════════════════════════════ */
+const WechatSDK = (function(){
+  "use strict";
+
+  var _ready = false, _configOk = false;
+
+  function isWechat() {
+    return /MicroMessenger/i.test(navigator.userAgent);
+  }
+
+  function isWxWork() {
+    return /wxwork/i.test(navigator.userAgent);
+  }
+
+  /** 获取 JS-SDK 签名（调用 Cloudflare Worker） */
+  async function fetchSignature() {
+    var signUrl = location.href.split('#')[0];
+    var resp = await fetch('/api/wechat-sign?url=' + encodeURIComponent(signUrl));
+    if (!resp.ok) {
+      var err = await resp.json().catch(function(){ return {}; });
+      throw new Error(err.error || '签名接口返回 ' + resp.status);
+    }
+    return resp.json();
+  }
+
+  /** 初始化 wx.config */
+  async function init() {
+    if (!isWechat() && !isWxWork()) return false;
+    if (typeof wx === 'undefined') return false;
+
+    try {
+      var cfg = await fetchSignature();
+    } catch(e) {
+      console.warn('微信签名获取失败:', e.message);
+      return false;
+    }
+
+    return new Promise(function(resolve){
+      wx.config({
+        debug: false,
+        appId: cfg.appId,
+        timestamp: cfg.timestamp,
+        nonceStr: cfg.nonceStr,
+        signature: cfg.signature,
+        jsApiList: ['chooseMessageFile']
+      });
+
+      wx.ready(function(){
+        _configOk = true;
+        _ready = true;
+        resolve(true);
+      });
+
+      wx.error(function(err){
+        console.warn('wx.config 失败:', err.errMsg);
+        resolve(false);
+      });
+
+      // 超时 8s 兜底
+      setTimeout(function(){
+        if (!_ready) { _ready = true; resolve(false); }
+      }, 8000);
+    });
+  }
+
+  /** 从聊天记录选文件 */
+  function chooseFileFromChat() {
+    return new Promise(function(resolve, reject){
+      if (!_configOk) { reject(new Error('JS-SDK 未就绪')); return; }
+
+      wx.chooseMessageFile({
+        count: 1,
+        type: 'file',
+        success: function(res){
+          var tf = (res.tempFiles && res.tempFiles.length) ? res.tempFiles[0] : null;
+          if (tf) {
+            resolve({ name: tf.name, size: tf.size, localId: tf.localId });
+          } else {
+            reject(new Error('未选择文件'));
+          }
+        },
+        fail: function(err){
+          reject(new Error(err.errMsg || '选择文件失败'));
+        },
+        cancel: function(){
+          reject(new Error('用户取消'));
+        }
+      });
+    });
+  }
+
+  return {
+    isWechat: isWechat,
+    init: init,
+    chooseFileFromChat: chooseFileFromChat,
+    isReady: function(){ return _configOk; }
+  };
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   C. 格式提取器 — 从 .docx 范本中提取字体/字号/行距/页边距等
       (原 backend/app/format_extractor.py → JS)
    ═══════════════════════════════════════════════════════════════════ */
 const FormatExtractor = (function(){
@@ -1340,7 +1444,7 @@ const FormatExtractor = (function(){
 
 
 /* ═══════════════════════════════════════════════════════════════════
-   C. 文本格式规则解析器 — 解析中文格式描述文本
+   D. 文本格式规则解析器 — 解析中文格式描述文本
       (原 backend/app/text_rule_parser.py → JS)
    ═══════════════════════════════════════════════════════════════════ */
 const TextRuleParser = (function(){
@@ -1531,7 +1635,7 @@ const TextRuleParser = (function(){
 
 
 /* ═══════════════════════════════════════════════════════════════════
-   D. 内容解析器 — 将用户输入文本解析为结构化元素
+   E. 内容解析器 — 将用户输入文本解析为结构化元素
       (原 backend/app/content_parser.py → JS)
    ═══════════════════════════════════════════════════════════════════ */
 const ContentParser = (function(){
@@ -1698,7 +1802,7 @@ const ContentParser = (function(){
 
 
 /* ═══════════════════════════════════════════════════════════════════
-   E. DOCX 生成器 — 生成 .docx 文件
+   F. DOCX 生成器 — 生成 .docx 文件
       (原 backend/app/doc_generator.py → JS)
    ═══════════════════════════════════════════════════════════════════ */
 const DocxGenerator = (function(){
@@ -2424,7 +2528,7 @@ function fallbackCopy(text) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   F. UI 控制器 — 连接界面和引擎
+   G. UI 控制器 — 连接界面和引擎
    ═══════════════════════════════════════════════════════════════════ */
 (function(){
   "use strict";
@@ -2492,6 +2596,7 @@ function fallbackCopy(text) {
   /* ── 文件上传 ── */
   var uploadZone = document.getElementById('uploadZone');
   var fileInput = document.getElementById('fileInput');
+  var _wechatReady = false;
 
   uploadZone.addEventListener('dragover', function(e){ e.preventDefault(); uploadZone.classList.add('drag-over'); });
   uploadZone.addEventListener('dragleave', function(){ uploadZone.classList.remove('drag-over'); });
@@ -2502,6 +2607,74 @@ function fallbackCopy(text) {
   fileInput.addEventListener('change', function(){
     if (fileInput.files.length) handleFile(fileInput.files[0]);
   });
+
+  // ══ 微信模式下：点击上传区 → 优先从聊天记录选文件 ══
+  if (WechatSDK.isWechat()) {
+    WechatSDK.init().then(function(ok){
+      if (ok) {
+        _wechatReady = true;
+        // 替换上传区提示文案
+        var txt = uploadZone.querySelector('.upload-text');
+        if (txt) txt.textContent = '点击从微信聊天记录中选择 .docx 文件';
+        var hint = uploadZone.querySelector('.upload-hint');
+        if (hint) hint.textContent = '支持从文件传输助手、群聊记录中直接选择';
+      }
+    });
+
+    // 拦截上传区点击
+    uploadZone.addEventListener('click', function(e){
+      if (!_wechatReady) return; // SDK 未就绪则走默认 <input> 行为
+      e.preventDefault();
+      e.stopPropagation();
+
+      WechatSDK.chooseFileFromChat().then(function(info){
+        // 选择了文件 → 尝试获取内容
+        return fetchWechatFileContent(info);
+      }).then(function(blob){
+        if (blob) handleFile(blob);
+      }).catch(function(err){
+        if (err.message === '用户取消') return;
+        // 微信取文件失败 → 回退到普通上传
+        showToast('请先将文件保存到手机，再点击上传', 'info');
+        setTimeout(function(){ fileInput.click(); }, 500);
+      });
+    }, true);
+  }
+
+  // ══ 通用：点击上传区 → 触发文件选择（非微信 / SDK 未就绪）══
+  uploadZone.addEventListener('click', function(e){
+    if (_wechatReady) return;
+    fileInput.click();
+  });
+
+  /** 尝试从微信 localId 获取文件 Blob */
+  function fetchWechatFileContent(info) {
+    return new Promise(function(resolve, reject){
+      // 方法1：wx.invoke getLocalFileData（部分版本支持）
+      if (typeof wx !== 'undefined' && wx.invoke) {
+        wx.invoke('getLocalFileData', { localId: info.localId }, function(res){
+          if (res && res.err_msg === 'getLocalFileData:ok' && res.localData) {
+            try {
+              // base64 → blob
+              var b64 = res.localData.replace(/^data:[^;]+;base64,/, '');
+              var raw = atob(b64);
+              var arr = new Uint8Array(raw.length);
+              for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+              var blob = new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+              blob.name = info.name || 'wechat_file.docx';
+              resolve(blob);
+            } catch(e) { reject(new Error('文件数据解析失败')); }
+          } else {
+            reject(new Error('getLocalFileData 不可用'));
+          }
+        });
+        // 超时
+        setTimeout(function(){ reject(new Error('getLocalFileData 超时')); }, 5000);
+        return;
+      }
+      reject(new Error('wx.invoke 不可用'));
+    });
+  }
 
   async function handleFile(file) {
     if (!file.name.match(/\.(docx|doc)$/i)) { showToast('仅支持 .docx 文件', 'error'); return; }
