@@ -571,6 +571,45 @@ main {
   vertical-align: middle;
 }
 
+/* ── HOOK ── */
+.homepage-hook {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 20px 20px 8px;
+  text-align: center;
+}
+.hook-label {
+  font-family: var(--font-display);
+  font-size: .75rem;
+  color: var(--text-m);
+  margin-bottom: 10px;
+}
+.hook-text {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-size: .78rem;
+  font-weight: 500;
+  color: var(--red);
+  padding: 10px 24px;
+  background: var(--red-bg);
+  border: 1px solid var(--rose);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  user-select: none;
+  transition: all .25s;
+}
+.hook-text:hover {
+  background: #ffe0e0;
+}
+.hook-copied {
+  font-size: .68rem;
+  color: var(--red);
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity .3s;
+}
+.hook-copied.show { opacity: 1; }
+
 /* ── FOOTER ── */
 footer {
   text-align: center;
@@ -743,6 +782,12 @@ footer {
       <a class="btn-download" id="btnDownload" href="#" download>下载文档</a>
     </div>
   </div>
+</div>
+
+<div class="homepage-hook">
+  <div class="hook-label">想要学习制作这样的网页？</div>
+  <div class="hook-text" id="hookEl" onclick="copyHook()">复制到浏览器然后打开 ——</div>
+  <div class="hook-copied" id="hookCopied">已复制 https://supersuperchik-home.pages.dev</div>
 </div>
 
 <footer>CFormatting · 从参考文档到规范输出，格式自动匹配</footer>
@@ -2353,6 +2398,30 @@ const DocxGenerator = (function(){
   };
 })();
 
+
+/* ── 主页钩子复制 ── */
+window.copyHook = function() {
+  var url = 'https://supersuperchik-home.pages.dev';
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(function(){
+      var el = document.getElementById('hookCopied');
+      el.classList.add('show');
+      setTimeout(function(){ el.classList.remove('show'); }, 2500);
+    }).catch(function(){ fallbackCopy(url); });
+  } else {
+    fallbackCopy(url);
+  }
+};
+function fallbackCopy(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+  var el = document.getElementById('hookCopied');
+  el.classList.add('show');
+  setTimeout(function(){ el.classList.remove('show'); }, 2500);
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    F. UI 控制器 — 连接界面和引擎
